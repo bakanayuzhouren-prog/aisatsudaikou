@@ -17,9 +17,70 @@ const StepGen: React.FC<StepGenProps> = ({ data, updateData, onNext, onBack }) =
   const [editPrompt, setEditPrompt] = useState("");
   const [budgetInfo, setBudgetInfo] = useState({ used: 0, remaining: 0 });
 
+  // Camera State
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+
   useEffect(() => {
     updateBudgetDisplay();
+    return () => {
+      // Cleanup stream on unmount
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+      }
+    };
   }, []);
+
+  const openCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' } // Prefer back camera
+      });
+      setCameraStream(stream);
+      setIsCameraOpen(true);
+    } catch (err) {
+      console.error("Camera Error:", err);
+      alert("カメラの起動に失敗しました。カメラへのアクセスを許可してください。\n(HTTPSまたはlocalhost環境でのみ動作します)");
+    }
+  };
+
+  const closeCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+    }
+    setIsCameraOpen(false);
+  };
+
+  const takePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const context = canvas.getContext('2d');
+      if (context) {
+        // Match canvas size to video resolution
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        // Convert to base64
+        const imageData = canvas.toDataURL('image/jpeg', 0.85); // 0.85 quality
+
+        // Update data
+        updateData({ originalImage: imageData, processedImage: null });
+        setEditPrompt("");
+        closeCamera();
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (isCameraOpen && videoRef.current && cameraStream) {
+      videoRef.current.srcObject = cameraStream;
+    }
+  }, [isCameraOpen, cameraStream]);
 
   const updateBudgetDisplay = () => {
     const usage = getUsage();
@@ -176,16 +237,32 @@ const StepGen: React.FC<StepGenProps> = ({ data, updateData, onNext, onBack }) =
             <span className="text-red-600 text-xl">📸</span> 2. 写真を加工・編集
           </h2>
           <div className="space-y-4">
-            <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-red-50 transition bg-white group">
-              <div className="flex flex-col items-center justify-center">
-                <span className="text-xl mb-1">📷</span>
-                <p className="text-xs text-gray-500 font-bold">写真を変更する</p>
-              </div>
-              <input type="file" className="hidden" onChange={handleImageUpload} accept="image/*" />
-            </label>
+
+            {/* 画像選択エリア: ファイル or カメラ */}
+            <div className="flex gap-4">
+              <label className="flex-1 flex flex-col items-center justify-center h-28 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-red-50 hover:border-red-300 transition bg-green-50 group shadow-sm">
+                <div className="flex flex-col items-center justify-center">
+                  <span className="text-2xl mb-1 group-hover:scale-110 transition">📁</span>
+                  <p className="text-xs text-gray-600 font-bold">写真を選択</p>
+                  <p className="text-[10px] text-gray-400">アルバムから</p>
+                </div>
+                <input type="file" className="hidden" onChange={handleImageUpload} accept="image/*" />
+              </label>
+
+              <button
+                onClick={openCamera}
+                className="flex-1 flex flex-col items-center justify-center h-28 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-red-50 hover:border-red-300 transition bg-blue-50 group shadow-sm"
+              >
+                <div className="flex flex-col items-center justify-center">
+                  <span className="text-2xl mb-1 group-hover:scale-110 transition">📸</span>
+                  <p className="text-xs text-gray-600 font-bold">カメラで撮影</p>
+                  <p className="text-[10px] text-gray-400">その場で撮影</p>
+                </div>
+              </button>
+            </div>
 
             {data.originalImage && (
-              <div className="space-y-4">
+              <div className="space-y-4 animate-fade-in">
                 <div className="p-4 bg-red-50 rounded-xl border border-red-100 space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-red-800 font-bold text-sm">
@@ -304,6 +381,38 @@ const StepGen: React.FC<StepGenProps> = ({ data, updateData, onNext, onBack }) =
           </div>
         </div>
       </div>
+
+      {/* Camera Modal */}
+      {isCameraOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex flex-col items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white p-4 rounded-2xl max-w-lg w-full shadow-2xl">
+            <h3 className="text-center font-bold text-gray-800 mb-4">写真を撮影</h3>
+            <div className="relative aspect-[3/4] bg-black rounded-xl overflow-hidden mb-6 shadow-inner border border-gray-200">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                className="w-full h-full object-cover"
+              />
+              <canvas ref={canvasRef} className="hidden" />
+            </div>
+            <div className="flex justify-between gap-4">
+              <button
+                onClick={closeCamera}
+                className="flex-1 py-3 rounded-lg font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={takePhoto}
+                className="flex-1 py-3 rounded-lg font-bold text-white bg-red-600 hover:bg-red-700 shadow-lg transition flex items-center justify-center gap-2"
+              >
+                <span>📸</span> 撮影する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div >
   );
 };
