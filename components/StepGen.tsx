@@ -1,0 +1,311 @@
+
+import React, { useState, useEffect } from 'react';
+import { FormData } from '../types';
+import { generateGreetingMessage, transformImageToIllustration, editImageWithPrompt } from '../lib/aiService';
+import { resizeImage } from '../lib/imageService';
+import { checkBudget, addCost, getUsage, getRemainingBudget, COSTS } from '../utils/costTracker';
+
+interface StepGenProps {
+  data: FormData;
+  updateData: (partial: Partial<FormData>) => void;
+  onNext: () => void;
+  onBack: () => void;
+}
+
+const StepGen: React.FC<StepGenProps> = ({ data, updateData, onNext, onBack }) => {
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [editPrompt, setEditPrompt] = useState("");
+  const [budgetInfo, setBudgetInfo] = useState({ used: 0, remaining: 0 });
+
+  useEffect(() => {
+    updateBudgetDisplay();
+  }, []);
+
+  const updateBudgetDisplay = () => {
+    const usage = getUsage();
+    setBudgetInfo({
+      used: usage.totalCost,
+      remaining: getRemainingBudget()
+    });
+  };
+
+  const handleAiText = async () => {
+    if (!checkBudget(COSTS.TEXT)) {
+      alert("今月の利用限度額（500円）に達しました。\n来月までお待ちいただくか、開発者にご相談ください。");
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      const text = await generateGreetingMessage(data);
+      updateData({ customMessage: text });
+      addCost(COSTS.TEXT);
+      updateBudgetDisplay();
+    } catch (e) {
+      console.error(e);
+      alert("挨拶文の生成に失敗しました。APIキーが正しく設定されているか確認してください。");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const applyTemplate = (type: 'formal' | 'casual' | 'family' | 'simple' | 'seasonal') => {
+    const address = `${data.newAddress.prefecture}${data.newAddress.city}`;
+    const name = data.name || "〇〇";
+
+    const templates = {
+      formal: `拝啓\n\n${new Date().getMonth() + 1}月の候、皆様におかれましては益々ご清祥のこととお慶び申し上げます。\n\nさて、この度、私どもは下記へ転居いたしました。\nお近くにお越しの際は、ぜひお立ち寄りください。\n今後とも変わらぬご指導ご鞭撻を賜りますようお願い申し上げます。\n\n敬具`,
+      casual: `新しい住所が決まりました！\n\n${address} で心機一転、新生活をスタートさせました。\n片付けも落ち着いてきたので、ぜひ遊びに来てください。\nこれからもよろしく！`,
+      family: `この度、${address} へ引っ越しました。\n\n新しい家では、家族みんなで賑やかに過ごしています。\nお近くに来られることがありましたら、ぜひお立ち寄りください。\n今後とも家族共々よろしくお願いいたします。`,
+      simple: `転居のお知らせ\n\nこの度、下記住所へ転居いたしました。\nお近くにお越しの際は、ぜひお立ち寄りください。\n今後ともよろしくお願い申し上げます。`,
+      seasonal: `爽やかな季節となりましたが、いかがお過ごしでしょうか。\n\nさて、この度私たちは ${address} へ引っ越しました。\n心機一転、新しい生活を楽しんでいます。\n今後とも変わらぬお付き合いをお願い申し上げます。`
+    };
+
+    updateData({ customMessage: templates[type] });
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      try {
+        const base64 = await resizeImage(file);
+        updateData({ originalImage: base64, processedImage: null });
+        setEditPrompt("");
+      } catch (err) {
+        alert("画像の読み込みに失敗しました。");
+      }
+    }
+  };
+
+  const handleTransform = async () => {
+    if (!data.originalImage) return;
+
+    if (!checkBudget(COSTS.IMAGE)) {
+      alert("今月の利用限度額（500円）以内で実行できません。\n来月までお待ちください。");
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      const processed = await transformImageToIllustration(data.originalImage, data.illustrationStyle);
+      updateData({ processedImage: processed });
+      addCost(COSTS.IMAGE);
+      updateBudgetDisplay();
+    } catch (e: any) {
+      console.error(e);
+      alert(`イラスト変換に失敗しました詳細:\n${e.message}`);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleAiEdit = async () => {
+    const targetImage = data.processedImage || data.originalImage;
+    if (!targetImage || !editPrompt.trim()) return;
+
+    if (!checkBudget(COSTS.IMAGE)) {
+      alert("今月の利用限度額（500円）以内で実行できません。\n来月までお待ちください。");
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      const processed = await editImageWithPrompt(targetImage, editPrompt);
+      updateData({ processedImage: processed });
+      addCost(COSTS.IMAGE);
+      updateBudgetDisplay();
+    } catch (e: any) {
+      console.error(e);
+      alert(`画像の編集に失敗しました詳細:\n${e.message}`);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const aspectRatioStyle = data.paperSize === 'a4' ? { aspectRatio: '1 / 1.414' } : { aspectRatio: '1 / 1.48' };
+
+  return (
+    <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in relative">
+
+      {/* 予算表示バッジ */}
+      <div className="absolute top-[-40px] right-0 bg-white px-4 py-2 rounded-full shadow-sm text-xs font-bold text-gray-500 flex items-center gap-2 border border-gray-200">
+        <span>💰 今月の利用額:</span>
+        <span className={`text-base ${budgetInfo.remaining < 50 ? 'text-red-500' : 'text-green-600'}`}>
+          {Math.floor(budgetInfo.used)}円
+        </span>
+        <span className="text-gray-400">/ 500円</span>
+      </div>
+
+      <div className="space-y-6">
+        <div className="bg-white p-6 rounded-xl shadow-lg border-t-4 border-green-600">
+          <h2 className="font-bold text-lg mb-4 flex items-center gap-2 text-gray-800">
+            <span className="text-green-600 text-xl">✍️</span> 1. 挨拶文を生成
+          </h2>
+
+          {/* 定型文ボタンエリア (無料) */}
+          <div className="bg-green-50 p-4 rounded-lg mb-6 border border-green-100">
+            <p className="text-xs font-bold text-green-800 mb-2 flex items-center gap-1">
+              <span>🆓</span> 定型文から選ぶ (無料・0円)
+            </p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <button onClick={() => applyTemplate('formal')} className="bg-white border border-green-200 text-green-700 hover:bg-green-100 py-2 px-1 rounded text-xs font-bold transition">丁寧（目上）</button>
+              <button onClick={() => applyTemplate('casual')} className="bg-white border border-green-200 text-green-700 hover:bg-green-100 py-2 px-1 rounded text-xs font-bold transition">親しみ（友人）</button>
+              <button onClick={() => applyTemplate('family')} className="bg-white border border-green-200 text-green-700 hover:bg-green-100 py-2 px-1 rounded text-xs font-bold transition">家族・子供</button>
+              <button onClick={() => applyTemplate('simple')} className="bg-white border border-green-200 text-green-700 hover:bg-green-100 py-2 px-1 rounded text-xs font-bold transition">シンプル</button>
+              <button onClick={() => applyTemplate('seasonal')} className="bg-white border border-green-200 text-green-700 hover:bg-green-100 py-2 px-1 rounded text-xs font-bold transition">季節の挨拶</button>
+            </div>
+          </div>
+
+          <button
+            onClick={handleAiText}
+            disabled={isGenerating || budgetInfo.remaining < COSTS.TEXT}
+            className="w-full bg-gradient-to-r from-gray-700 to-gray-600 text-white py-3 rounded-lg mb-4 font-bold shadow-md hover:shadow-gray-400 transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-sm"
+          >
+            {isGenerating ? <span className="animate-spin">🌀</span> : "✨ AIでオリジナル文章を作る (有料: 約0.5円)"}
+          </button>
+          <textarea
+            value={data.customMessage}
+            onChange={(e) => updateData({ customMessage: e.target.value })}
+            className="w-full border-gray-300 border h-48 p-4 rounded-lg focus:ring-2 focus:ring-red-500 outline-none text-gray-700 leading-relaxed text-sm bg-gray-50"
+            placeholder="ここにAIが作成した文章が表示されます。"
+          />
+        </div>
+
+        <div className="bg-white p-6 rounded-xl shadow-lg border-t-4 border-red-600">
+          <h2 className="font-bold text-lg mb-4 flex items-center gap-2 text-gray-800">
+            <span className="text-red-600 text-xl">📸</span> 2. 写真を加工・編集
+          </h2>
+          <div className="space-y-4">
+            <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-red-50 transition bg-white group">
+              <div className="flex flex-col items-center justify-center">
+                <span className="text-xl mb-1">📷</span>
+                <p className="text-xs text-gray-500 font-bold">写真を変更する</p>
+              </div>
+              <input type="file" className="hidden" onChange={handleImageUpload} accept="image/*" />
+            </label>
+
+            {data.originalImage && (
+              <div className="space-y-4">
+                <div className="p-4 bg-red-50 rounded-xl border border-red-100 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-red-800 font-bold text-sm">
+                      <span>🎨</span> イラスト変換
+                    </div>
+                    <div className="flex gap-1">
+                      {(['contain', 'cover'] as const).map(fit => (
+                        <button
+                          key={fit}
+                          onClick={() => updateData({ objectFit: fit })}
+                          className={`px-2 py-1 rounded text-[10px] font-bold border transition ${data.objectFit === fit ? 'bg-red-600 text-white border-red-600' : 'bg-white text-red-600 border-red-200'
+                            }`}
+                        >
+                          {fit === 'contain' ? '全体を表示' : '枠に広げる'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-4 gap-2">
+                    {(['standard', 'casual', 'simple', 'luxury'] as const).map(style => (
+                      <button
+                        key={style}
+                        onClick={() => updateData({ illustrationStyle: style })}
+                        className={`py-2 rounded-lg text-[10px] font-medium border transition ${data.illustrationStyle === style ? 'bg-red-600 text-white border-red-600' : 'bg-white text-gray-600 border-gray-200'
+                          }`}
+                      >
+                        {style}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={handleTransform}
+                    disabled={isGenerating || budgetInfo.remaining < COSTS.IMAGE}
+                    className="w-full bg-red-600 text-white py-3 rounded-lg font-bold shadow-md hover:bg-red-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {isGenerating ? "変換中..." : "イラスト風に変換実行 (約7円)"}
+                  </button>
+                </div>
+
+                <div className="p-4 bg-gray-100 rounded-xl border border-gray-200 space-y-3">
+                  <div className="flex items-center gap-2 text-gray-700 font-bold text-sm">
+                    <span>🪄</span> AIで自由に編集
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={editPrompt}
+                      onChange={(e) => setEditPrompt(e.target.value)}
+                      placeholder="例: 背景を消して"
+                      className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-gray-400 outline-none bg-white"
+                      onKeyDown={(e) => e.key === 'Enter' && handleAiEdit()}
+                    />
+                    <button
+                      onClick={handleAiEdit}
+                      disabled={isGenerating || !editPrompt.trim() || budgetInfo.remaining < COSTS.IMAGE}
+                      className="bg-gray-700 text-white px-4 py-2 rounded-lg font-bold shadow-md text-sm disabled:opacity-50"
+                    >
+                      実行 (約7円)
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col items-center">
+        <div className="lg:sticky lg:top-24 w-full flex flex-col items-center">
+          <h2 className="font-bold text-gray-500 text-xs mb-4 uppercase tracking-widest">
+            Preview / 完成イメージ ({data.paperSize === 'a4' ? 'A4' : 'ハガキ'})
+          </h2>
+
+          <div className="w-full flex justify-center px-4">
+            <div
+              className="w-full max-w-[320px] sm:max-w-sm bg-white border border-gray-100 shadow-2xl p-6 sm:p-8 flex flex-col overflow-hidden relative transition-all duration-300 origin-top"
+              style={{ ...aspectRatioStyle, backgroundColor: data.backgroundColor }}
+            >
+              <div className="h-[45%] bg-gray-100 mb-6 overflow-hidden rounded-sm border border-gray-200 relative shadow-inner group">
+                {data.processedImage ? (
+                  <img src={data.processedImage} className={`w-full h-full animate-fade-in ${data.objectFit === 'cover' ? 'object-cover' : 'object-contain'}`} alt="Preview" />
+                ) : data.originalImage ? (
+                  <img src={data.originalImage} className={`w-full h-full opacity-40 ${data.objectFit === 'cover' ? 'object-cover' : 'object-contain'}`} alt="Draft" />
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-gray-300">
+                    <span className="text-4xl mb-2">🏡</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex-1 flex flex-col">
+                <div className="flex-1 overflow-y-auto">
+                  <p className="text-[10px] sm:text-[11px] leading-relaxed whitespace-pre-wrap text-gray-800 font-serif">
+                    {data.customMessage || "挨拶文がここに表示されます。"}
+                  </p>
+                </div>
+
+                <div className="pt-4 border-t border-gray-100 flex justify-end">
+                  <p className="text-xs sm:text-sm font-bold text-gray-900 font-serif">{data.name || "世帯主氏名"} より</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-between w-full max-w-sm mt-8 px-4">
+            <button onClick={onBack} className="flex items-center gap-1 text-gray-500 hover:text-gray-700 font-bold transition">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M15 19l-7-7 7-7"></path></svg>
+              戻る
+            </button>
+            <button
+              onClick={onNext}
+              className="bg-green-600 text-white px-8 py-3 rounded-lg font-bold shadow-xl hover:bg-green-700 transition-all"
+            >
+              完成！印刷へ進む
+            </button>
+          </div>
+        </div>
+      </div>
+    </div >
+  );
+};
+
+export default StepGen;
