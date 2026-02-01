@@ -18,21 +18,24 @@ export type IllustrationStyle = 'standard' | 'casual' | 'simple' | 'luxury';
 export interface FormData {
   name: string;
   familySize: number;
+  familyType: 'single' | 'couple' | 'family_small' | 'family_school' | 'two_households' | null;
   oldAddress: AddressData;
   newAddress: AddressData;
   hobbies: string;
   selectedTemplateId: string;
   customMessage: string;
-  
+
   // Schedule
-  visitDate: string;
+  // Schedule
+  visitMonth: string;
+  visitDay: string;
   visitTime: string;
 
   // Photo Settings
   photoMode: 'group' | 'individual';
   illustrationStyle: IllustrationStyle;
   objectFit: 'cover' | 'contain'; // Added to control image cropping
-  
+
   // Appearance
   backgroundColor: string;
   paperSize: 'a4' | 'postcard';
@@ -40,7 +43,7 @@ export interface FormData {
   // Group Mode Data
   originalImage: string | null; // Base64
   processedImage: string | null; // Base64
-  
+
   // Individual Mode Data
   familyMembers: FamilyMember[];
 }

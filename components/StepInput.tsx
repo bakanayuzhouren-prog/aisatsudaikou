@@ -45,11 +45,84 @@ const StepInput: React.FC<StepInputProps> = ({ data, updateData, onNext }) => {
             />
           </div>
 
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2 border-l-4 border-green-500 pl-2">家族構成 (挨拶文のタイプ)</label>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <button
+                onClick={() => updateData({ familyType: 'single', customMessage: '' })}
+                className={`py-3 px-2 rounded-lg text-xs font-bold border transition ${data.familyType === 'single' ? 'bg-green-600 text-white border-green-600 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-green-50'}`}
+              >
+                👤 一人暮らし
+              </button>
+              <button
+                onClick={() => updateData({ familyType: 'couple', customMessage: '' })}
+                className={`py-3 px-2 rounded-lg text-xs font-bold border transition ${data.familyType === 'couple' ? 'bg-green-600 text-white border-green-600 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-green-50'}`}
+              >
+                💑 夫婦のみ
+              </button>
+              <button
+                onClick={() => updateData({ familyType: 'family_small', customMessage: '' })}
+                className={`py-3 px-2 rounded-lg text-xs font-bold border transition ${data.familyType === 'family_small' ? 'bg-green-600 text-white border-green-600 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-green-50'}`}
+              >
+                👶 小さな子どもあり
+              </button>
+              <button
+                onClick={() => updateData({ familyType: 'family_school', customMessage: '' })}
+                className={`py-3 px-2 rounded-lg text-xs font-bold border transition ${data.familyType === 'family_school' ? 'bg-green-600 text-white border-green-600 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-green-50'}`}
+              >
+                🎒 学校に通う子どもあり
+              </button>
+              <button
+                onClick={() => updateData({ familyType: 'two_households', customMessage: '' })}
+                className={`py-3 px-2 rounded-lg text-xs font-bold border transition ${data.familyType === 'two_households' ? 'bg-green-600 text-white border-green-600 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-green-50'}`}
+              >
+                🏠 二世帯・同居
+              </button>
+            </div>
+          </div>
+
           <AddressInput
-            label="新居の住所"
-            value={data.newAddress}
-            onChange={(val) => updateData({ newAddress: val })}
+            label="旧居の住所 (引っ越し前)"
+            value={data.oldAddress}
+            onChange={(val) => updateData({ oldAddress: val })}
           />
+
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2 border-l-4 border-green-500 pl-2">訪問予定 (挨拶に含める場合)</label>
+            <div className="flex gap-4 items-center">
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  placeholder="例: 4"
+                  value={data.visitMonth}
+                  onChange={(e) => updateData({ visitMonth: e.target.value, customMessage: '' })}
+                  className="w-16 border border-gray-300 p-2 rounded bg-white focus:ring-2 focus:ring-red-500 outline-none text-center"
+                />
+                <span className="text-sm font-bold text-gray-700">月</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  placeholder="例: 1"
+                  value={data.visitDay}
+                  onChange={(e) => updateData({ visitDay: e.target.value, customMessage: '' })}
+                  className="w-16 border border-gray-300 p-2 rounded bg-white focus:ring-2 focus:ring-red-500 outline-none text-center"
+                />
+                <span className="text-sm font-bold text-gray-700">日</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <input
+                  type="text"
+                  placeholder="例: 14"
+                  value={data.visitTime}
+                  onChange={(e) => updateData({ visitTime: e.target.value, customMessage: '' })}
+                  className="w-16 border border-gray-300 p-2 rounded bg-white focus:ring-2 focus:ring-red-500 outline-none text-center"
+                />
+                <span className="text-sm font-bold text-gray-700">時頃にお伺いします</span>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">※未入力の場合は挨拶文に含まれません。</p>
+          </div>
 
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-1 border-l-4 border-green-500 pl-2">新しい生活の楽しみや趣味</label>

@@ -5,7 +5,7 @@
 export const fetchAddressByZip = async (zip: string): Promise<{ prefecture: string; city: string } | null> => {
   // Remove hyphens
   const cleanZip = zip.replace(/-/g, '');
-  
+
   if (cleanZip.length !== 7) {
     return null;
   }
@@ -18,7 +18,7 @@ export const fetchAddressByZip = async (zip: string): Promise<{ prefecture: stri
       const result = data.results[0];
       return {
         prefecture: result.address1,
-        city: result.address2 + result.address3,
+        city: result.address2,
       };
     }
     return null;

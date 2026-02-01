@@ -7,6 +7,7 @@ import StepPrint from './components/StepPrint';
 import PinLock from './components/PinLock';
 import HostingGuide from './components/HostingGuide';
 
+// Force HMR
 const generateMembers = (count: number) => {
   return Array.from({ length: count }, (_, i) => ({
     id: `member_${Date.now()}_${i}`,
@@ -19,10 +20,12 @@ const generateMembers = (count: number) => {
 const INITIAL_DATA: FormData = {
   name: '',
   familySize: 2,
+  familyType: null,
   oldAddress: { zip: '', prefecture: '', city: '', addressLine: '' },
   newAddress: { zip: '', prefecture: '', city: '', addressLine: '' },
   hobbies: '',
-  visitDate: '',
+  visitMonth: '',
+  visitDay: '',
   visitTime: '',
   selectedTemplateId: '',
   customMessage: '',

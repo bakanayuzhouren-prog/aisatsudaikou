@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { FormData } from '../types';
 import { generateGreetingMessage, transformImageToIllustration, editImageWithPrompt } from '../lib/aiService';
@@ -19,68 +18,10 @@ const StepGen: React.FC<StepGenProps> = ({ data, updateData, onNext, onBack }) =
 
   // Camera State
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [activeMemberId, setActiveMemberId] = useState<string | null>(null); // For individual mode camera
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    updateBudgetDisplay();
-    return () => {
-      // Cleanup stream on unmount
-      if (cameraStream) {
-        cameraStream.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, []);
-
-  const openCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' } // Prefer back camera
-      });
-      setCameraStream(stream);
-      setIsCameraOpen(true);
-    } catch (err) {
-      console.error("Camera Error:", err);
-      alert("カメラの起動に失敗しました。カメラへのアクセスを許可してください。\n(HTTPSまたはlocalhost環境でのみ動作します)");
-    }
-  };
-
-  const closeCamera = () => {
-    if (cameraStream) {
-      cameraStream.getTracks().forEach(track => track.stop());
-      setCameraStream(null);
-    }
-    setIsCameraOpen(false);
-  };
-
-  const takePhoto = () => {
-    if (videoRef.current && canvasRef.current) {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      const context = canvas.getContext('2d');
-      if (context) {
-        // Match canvas size to video resolution
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        // Convert to base64
-        const imageData = canvas.toDataURL('image/jpeg', 0.85); // 0.85 quality
-
-        // Update data
-        updateData({ originalImage: imageData, processedImage: null });
-        setEditPrompt("");
-        closeCamera();
-      }
-    }
-  };
-
-  useEffect(() => {
-    if (isCameraOpen && videoRef.current && cameraStream) {
-      videoRef.current.srcObject = cameraStream;
-    }
-  }, [isCameraOpen, cameraStream]);
 
   const updateBudgetDisplay = () => {
     const usage = getUsage();
@@ -88,6 +29,24 @@ const StepGen: React.FC<StepGenProps> = ({ data, updateData, onNext, onBack }) =
       used: usage.totalCost,
       remaining: getRemainingBudget()
     });
+  };
+
+  const applyTemplate = (type: 'single' | 'couple' | 'family_small' | 'family_school' | 'two_households') => {
+    const address = `${data.oldAddress.prefecture}${data.oldAddress.city}`;
+    const name = data.name || "〇〇";
+    const visitText = (data.visitMonth && data.visitDay && data.visitTime)
+      ? `\nご都合がよろしければ、${data.visitMonth}月${data.visitDay}日${data.visitTime}時頃に\nご挨拶に伺えればと存じます。`
+      : "";
+
+    const templates = {
+      single: `この度、${address} より引っ越してきました。${name}と申します。\n新しい環境での生活は、これからとなりますが、\n建設中は何かとご配慮を賜り、誠にありがとうございました。\nまだ不慣れな点もあるかと存じますが、\n今後ともどうぞよろしくお願いいたします。`,
+      couple: `この度、私たちは ${address} より引っ越してきました。${name}と申します。\n二人で協力しながら、新しい生活を始めてまいります。\n建設中は何かとご配慮を賜り、誠にありがとうございました。\n何かと至らぬ点もあるかと存じますが、\n今後ともどうぞよろしくお願い申し上げます。`,
+      family_small: `この度、${address} より引っ越してきました。${name}と申します。\n小さな子どもがおり、何かとお騒がせしてしまうことがあるかもしれませんが、\n建設中は何かとご配慮を賜り、心より御礼申し上げます。\nまだ不慣れな点もあるかと存じますが、\n今後ともどうぞよろしくお願いいたします。`,
+      family_school: `この度、${address} より引っ越してきました。${name}と申します。\n子どもの転校手続きなども一段落し、\n新しい生活を少しずつ整えているところです。\n建設中は何かとご配慮を賜り、誠にありがとうございました。\n何かとお世話になることもあるかと存じますが、\n今後ともどうぞよろしくお願いいたします。`,
+      two_households: `この度、${address} より引っ越してきました。${name}と申します。\n建設中は何かとご配慮を賜り、誠にありがとうございました。\n世帯人数も多く、何かとお騒がせしてしまうことがあるかと存じますが、\nまだ不慣れな点もあるかと存じます。\n今後とも家族一同、どうぞよろしくお願いいたします。`
+    };
+
+    updateData({ customMessage: templates[type] + visitText });
   };
 
   const handleAiText = async () => {
@@ -110,32 +69,104 @@ const StepGen: React.FC<StepGenProps> = ({ data, updateData, onNext, onBack }) =
     }
   };
 
-  const applyTemplate = (type: 'formal' | 'casual' | 'family' | 'simple' | 'seasonal') => {
-    const address = `${data.newAddress.prefecture}${data.newAddress.city}`;
-    const name = data.name || "〇〇";
-
-    const templates = {
-      formal: `拝啓\n\n${new Date().getMonth() + 1}月の候、皆様におかれましては益々ご清祥のこととお慶び申し上げます。\n\nさて、この度、私どもは下記へ転居いたしました。\nお近くにお越しの際は、ぜひお立ち寄りください。\n今後とも変わらぬご指導ご鞭撻を賜りますようお願い申し上げます。\n\n敬具`,
-      casual: `新しい住所が決まりました！\n\n${address} で心機一転、新生活をスタートさせました。\n片付けも落ち着いてきたので、ぜひ遊びに来てください。\nこれからもよろしく！`,
-      family: `この度、${address} へ引っ越しました。\n\n新しい家では、家族みんなで賑やかに過ごしています。\nお近くに来られることがありましたら、ぜひお立ち寄りください。\n今後とも家族共々よろしくお願いいたします。`,
-      simple: `転居のお知らせ\n\nこの度、下記住所へ転居いたしました。\nお近くにお越しの際は、ぜひお立ち寄りください。\n今後ともよろしくお願い申し上げます。`,
-      seasonal: `爽やかな季節となりましたが、いかがお過ごしでしょうか。\n\nさて、この度私たちは ${address} へ引っ越しました。\n心機一転、新しい生活を楽しんでいます。\n今後とも変わらぬお付き合いをお願い申し上げます。`
-    };
-
-    updateData({ customMessage: templates[type] });
+  const openCamera = async (memberId: string | null = null) => {
+    setActiveMemberId(memberId);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' } // Prefer back camera
+      });
+      setCameraStream(stream);
+      setIsCameraOpen(true);
+    } catch (err) {
+      console.error("Camera Error:", err);
+      alert("カメラの起動に失敗しました。カメラへのアクセスを許可してください。\n(HTTPSまたはlocalhost環境でのみ動作します)");
+    }
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const closeCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+    }
+    setIsCameraOpen(false);
+    setActiveMemberId(null);
+  };
+
+  const takePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const context = canvas.getContext('2d');
+      if (context) {
+        // Match canvas size to video resolution
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        // Convert to base64
+        const imageData = canvas.toDataURL('image/jpeg', 0.85); // 0.85 quality
+
+        if (activeMemberId) {
+          // Update individual member
+          const updatedMembers = data.familyMembers.map(m =>
+            m.id === activeMemberId ? { ...m, originalImage: imageData, processedImage: null } : m
+          );
+          updateData({ familyMembers: updatedMembers });
+        } else {
+          // Update main group image
+          updateData({ originalImage: imageData, processedImage: null });
+        }
+
+        setEditPrompt("");
+        closeCamera();
+      }
+    }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, memberId: string | null = null) => {
     const file = e.target.files?.[0];
     if (file) {
       try {
         const base64 = await resizeImage(file);
-        updateData({ originalImage: base64, processedImage: null });
+        if (memberId) {
+          const updatedMembers = data.familyMembers.map(m =>
+            m.id === memberId ? { ...m, originalImage: base64, processedImage: null } : m
+          );
+          updateData({ familyMembers: updatedMembers });
+        } else {
+          updateData({ originalImage: base64, processedImage: null });
+        }
         setEditPrompt("");
       } catch (err) {
         alert("画像の読み込みに失敗しました。");
       }
     }
+  };
+
+  const handleFamilySizeChange = (size: number) => {
+    let members = [...data.familyMembers];
+    if (size > members.length) {
+      // Add members
+      for (let i = members.length; i < size; i++) {
+        members.push({
+          id: `member_${Date.now()}_${i}`,
+          originalImage: null,
+          processedImage: null,
+          profile: ''
+        });
+      }
+    } else if (size < members.length) {
+      // Remove members
+      members = members.slice(0, size);
+    }
+    updateData({ familySize: size, familyMembers: members });
+  };
+
+  const updateMemberProfile = (id: string, text: string) => {
+    const updatedMembers = data.familyMembers.map(m =>
+      m.id === id ? { ...m, profile: text } : m
+    );
+    updateData({ familyMembers: updatedMembers });
   };
 
   const handleTransform = async () => {
@@ -183,6 +214,29 @@ const StepGen: React.FC<StepGenProps> = ({ data, updateData, onNext, onBack }) =
     }
   };
 
+  useEffect(() => {
+    updateBudgetDisplay();
+    return () => {
+      // Cleanup stream on unmount
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
+
+  // Auto-apply template based on familyType from Step 1
+  useEffect(() => {
+    if (data.familyType && !data.customMessage) {
+      applyTemplate(data.familyType);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isCameraOpen && videoRef.current && cameraStream) {
+      videoRef.current.srcObject = cameraStream;
+    }
+  }, [isCameraOpen, cameraStream]);
+
   const aspectRatioStyle = data.paperSize === 'a4' ? { aspectRatio: '1 / 1.414' } : { aspectRatio: '1 / 1.48' };
 
   return (
@@ -203,19 +257,7 @@ const StepGen: React.FC<StepGenProps> = ({ data, updateData, onNext, onBack }) =
             <span className="text-green-600 text-xl">✍️</span> 1. 挨拶文を生成
           </h2>
 
-          {/* 定型文ボタンエリア (無料) */}
-          <div className="bg-green-50 p-4 rounded-lg mb-6 border border-green-100">
-            <p className="text-xs font-bold text-green-800 mb-2 flex items-center gap-1">
-              <span>🆓</span> 定型文から選ぶ (無料・0円)
-            </p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              <button onClick={() => applyTemplate('formal')} className="bg-white border border-green-200 text-green-700 hover:bg-green-100 py-2 px-1 rounded text-xs font-bold transition">丁寧（目上）</button>
-              <button onClick={() => applyTemplate('casual')} className="bg-white border border-green-200 text-green-700 hover:bg-green-100 py-2 px-1 rounded text-xs font-bold transition">親しみ（友人）</button>
-              <button onClick={() => applyTemplate('family')} className="bg-white border border-green-200 text-green-700 hover:bg-green-100 py-2 px-1 rounded text-xs font-bold transition">家族・子供</button>
-              <button onClick={() => applyTemplate('simple')} className="bg-white border border-green-200 text-green-700 hover:bg-green-100 py-2 px-1 rounded text-xs font-bold transition">シンプル</button>
-              <button onClick={() => applyTemplate('seasonal')} className="bg-white border border-green-200 text-green-700 hover:bg-green-100 py-2 px-1 rounded text-xs font-bold transition">季節の挨拶</button>
-            </div>
-          </div>
+
 
           <button
             onClick={handleAiText}
@@ -238,28 +280,105 @@ const StepGen: React.FC<StepGenProps> = ({ data, updateData, onNext, onBack }) =
           </h2>
           <div className="space-y-4">
 
-            {/* 画像選択エリア: ファイル or カメラ */}
-            <div className="flex gap-4">
-              <label className="flex-1 flex flex-col items-center justify-center h-28 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-red-50 hover:border-red-300 transition bg-green-50 group shadow-sm">
-                <div className="flex flex-col items-center justify-center">
-                  <span className="text-2xl mb-1 group-hover:scale-110 transition">📁</span>
-                  <p className="text-xs text-gray-600 font-bold">写真を選択</p>
-                  <p className="text-[10px] text-gray-400">アルバムから</p>
-                </div>
-                <input type="file" className="hidden" onChange={handleImageUpload} accept="image/*" />
-              </label>
-
-              <button
-                onClick={openCamera}
-                className="flex-1 flex flex-col items-center justify-center h-28 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-red-50 hover:border-red-300 transition bg-blue-50 group shadow-sm"
-              >
-                <div className="flex flex-col items-center justify-center">
-                  <span className="text-2xl mb-1 group-hover:scale-110 transition">📸</span>
-                  <p className="text-xs text-gray-600 font-bold">カメラで撮影</p>
-                  <p className="text-[10px] text-gray-400">その場で撮影</p>
-                </div>
-              </button>
+            {/* モード選択 (家族全員 vs 個別) */}
+            <div className="bg-red-50 p-4 rounded-lg border border-red-100 mb-4">
+              <p className="text-xs font-bold text-red-800 mb-2 flex items-center gap-1">
+                <span>👥</span> 写真モードを選択
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => updateData({ photoMode: 'group' })}
+                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold border transition flex items-center justify-center gap-2 ${data.photoMode === 'group' ? 'bg-red-600 text-white border-red-600 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                >
+                  <span>👨‍👩‍👧‍👦</span> 家族全員での挨拶
+                </button>
+                <button
+                  onClick={() => updateData({ photoMode: 'individual' })}
+                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold border transition flex items-center justify-center gap-2 ${data.photoMode === 'individual' ? 'bg-red-600 text-white border-red-600 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                >
+                  <span>👤</span> 個々のプロフィール
+                </button>
+              </div>
             </div>
+
+            {/* 画像選択エリア: ファイル or カメラ */}
+            {data.photoMode === 'group' ? (
+              <div className="flex gap-4">
+                <label className="flex-1 flex flex-col items-center justify-center h-28 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-red-50 hover:border-red-300 transition bg-green-50 group shadow-sm">
+                  <div className="flex flex-col items-center justify-center">
+                    <span className="text-2xl mb-1 group-hover:scale-110 transition">📁</span>
+                    <p className="text-xs text-gray-600 font-bold">写真を選択</p>
+                    <p className="text-[10px] text-gray-400">アルバムから</p>
+                  </div>
+                  <input type="file" className="hidden" onChange={(e) => handleImageUpload(e)} accept="image/*" />
+                </label>
+
+                <button
+                  onClick={() => openCamera()}
+                  className="flex-1 flex flex-col items-center justify-center h-28 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-red-50 hover:border-red-300 transition bg-blue-50 group shadow-sm"
+                >
+                  <div className="flex flex-col items-center justify-center">
+                    <span className="text-2xl mb-1 group-hover:scale-110 transition">📸</span>
+                    <p className="text-xs text-gray-600 font-bold">カメラで撮影</p>
+                    <p className="text-[10px] text-gray-400">その場で撮影</p>
+                  </div>
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="text-sm font-bold text-gray-700">家族の人数:</label>
+                  <select
+                    value={data.familySize}
+                    onChange={(e) => handleFamilySizeChange(Number(e.target.value))}
+                    className="border border-gray-300 rounded p-1 text-sm"
+                  >
+                    {[1, 2, 3, 4, 5, 6].map(num => (
+                      <option key={num} value={num}>{num}人</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid gap-4">
+                  {data.familyMembers.map((member, index) => (
+                    <div key={member.id} className="border border-gray-200 rounded-lg p-3 bg-gray-50 flex gap-3 items-start">
+                      <div className="w-20 h-20 bg-gray-200 rounded-md overflow-hidden flex-shrink-0 border border-gray-300 relative">
+                        {member.originalImage ? (
+                          <img src={member.originalImage} className="w-full h-full object-cover" alt={`Member ${index + 1}`} />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">No Image</div>
+                        )}
+                      </div>
+
+                      <div className="flex-1 space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs font-bold text-gray-700">メンバー {index + 1}</span>
+                          <div className="flex gap-1">
+                            <label className="cursor-pointer bg-white border border-gray-300 text-gray-600 px-2 py-1 rounded text-[10px] hover:bg-gray-100">
+                              📁 選択
+                              <input type="file" className="hidden" onChange={(e) => handleImageUpload(e, member.id)} accept="image/*" />
+                            </label>
+                            <button
+                              onClick={() => openCamera(member.id)}
+                              className="bg-white border border-gray-300 text-gray-600 px-2 py-1 rounded text-[10px] hover:bg-gray-100"
+                            >
+                              📸 撮影
+                            </button>
+                          </div>
+                        </div>
+                        <input
+                          type="text"
+                          value={member.profile}
+                          onChange={(e) => updateMemberProfile(member.id, e.target.value)}
+                          placeholder="例: パパ、趣味:サッカー"
+                          className="w-full text-xs border border-gray-300 rounded px-2 py-1"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {data.originalImage && (
               <div className="space-y-4 animate-fade-in">
