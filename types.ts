@@ -44,6 +44,9 @@ export interface FormData {
   originalImage: string | null; // Base64
   processedImage: string | null; // Base64
 
+  // Layout Settings
+  layout?: LayoutConfig;
+
   // Individual Mode Data
   familyMembers: FamilyMember[];
 }
@@ -55,12 +58,31 @@ export interface Template {
 }
 
 export interface LayoutConfig {
-  imageScale: number;
-  imageX: number;
-  imageY: number;
-  textX: number;
-  textY: number;
-  objectFit: 'cover' | 'contain';
-  fontSize: number; // percentage, default 100
-  paperSize: 'a4' | 'postcard' | 'b5';
+  imageX: number; // mm offset
+  imageY: number; // mm offset
+  imageScale: number; // % (50-200)
+  imageObjectFit: 'cover' | 'contain';
+
+  // Text Global Position
+  textContainerX: number; // mm offset
+  textContainerY: number; // mm offset
+
+  // Message Settings
+  message: {
+    fontSize: number; // pt
+    alignment: 'left' | 'center' | 'right';
+    tracking: number; // em
+    lineHeight: number;
+    marginTop: number; // mm
+  };
+
+  // Name Settings
+  name: {
+    fontSize: number; // pt
+    alignment: 'left' | 'center' | 'right';
+    marginTop: number; // mm
+    tracking: number; // em
+  };
+
+  paperSize: 'a4' | 'postcard';
 }

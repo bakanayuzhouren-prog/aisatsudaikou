@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { FormData } from './types';
+import { DEFAULT_LAYOUT } from './constants';
 import StepInput from './components/StepInput';
 import StepGen from './components/StepGen';
 import StepPrint from './components/StepPrint';
@@ -37,6 +38,7 @@ const INITIAL_DATA: FormData = {
   originalImage: null,
   processedImage: null,
   familyMembers: generateMembers(2),
+  layout: DEFAULT_LAYOUT,
 };
 
 const STORAGE_KEY = 'moving_card_data_v1';
@@ -108,7 +110,7 @@ function App() {
       <main className="p-4 md:p-8 bg-gray-50 min-h-[calc(100vh-64px)]">
         {step === 'input' && <StepInput data={formData} updateData={updateData} onNext={() => setStep('design')} />}
         {step === 'design' && <StepGen data={formData} updateData={updateData} onNext={() => setStep('print')} onBack={() => setStep('input')} />}
-        {step === 'print' && <StepPrint data={formData} onBack={() => setStep('design')} />}
+        {step === 'print' && <StepPrint data={formData} updateData={updateData} onBack={() => setStep('design')} />}
       </main>
     </div>
   );

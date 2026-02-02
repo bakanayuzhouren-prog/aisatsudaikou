@@ -54,12 +54,28 @@ export const GREETING_TEMPLATES: Template[] = [
 ];
 
 export const DEFAULT_LAYOUT: LayoutConfig = {
-  imageScale: 100,
   imageX: 0,
   imageY: 0,
-  textX: 0,
-  textY: 0,
-  objectFit: 'cover',
-  fontSize: 100,
-  paperSize: 'a4',
+  imageScale: 100,
+  imageObjectFit: 'cover',
+
+  textContainerX: 0,
+  textContainerY: 0,
+
+  message: {
+    fontSize: 11,
+    alignment: 'left',
+    tracking: 0.05,
+    lineHeight: 1.8,
+    marginTop: 0,
+  },
+
+  name: {
+    fontSize: 14,
+    alignment: 'right',
+    marginTop: 8,
+    tracking: 0.05,
+  },
+
+  paperSize: 'postcard',
 };
