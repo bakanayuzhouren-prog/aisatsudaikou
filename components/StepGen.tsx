@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FormData } from '../types';
 import { generateGreetingMessage, transformImageToIllustration, editImageWithPrompt } from '../lib/aiService';
-import { resizeImage } from '../lib/imageService';
+import { resizeImage, resizeBase64 } from '../lib/imageService';
 import { checkBudget, addCost, getUsage, getRemainingBudget, COSTS } from '../utils/costTracker';
 
 interface StepGenProps {
@@ -104,21 +104,27 @@ const StepGen: React.FC<StepGenProps> = ({ data, updateData, onNext, onBack }) =
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
         // Convert to base64
-        const imageData = canvas.toDataURL('image/jpeg', 0.85); // 0.85 quality
+        const rawImageData = canvas.toDataURL('image/jpeg', 0.85); // 0.85 quality
 
-        if (activeMemberId) {
-          // Update individual member
-          const updatedMembers = data.familyMembers.map(m =>
-            m.id === activeMemberId ? { ...m, originalImage: imageData, processedImage: null } : m
-          );
-          updateData({ familyMembers: updatedMembers });
-        } else {
-          // Update main group image
-          updateData({ originalImage: imageData, processedImage: null });
-        }
+        // Resize if too big (for mobile stability)
+        resizeBase64(rawImageData).then(imageData => {
+          if (activeMemberId) {
+            // Update individual member
+            const updatedMembers = data.familyMembers.map(m =>
+              m.id === activeMemberId ? { ...m, originalImage: imageData, processedImage: null } : m
+            );
+            updateData({ familyMembers: updatedMembers });
+          } else {
+            // Update main group image
+            updateData({ originalImage: imageData, processedImage: null });
+          }
 
-        setEditPrompt("");
-        closeCamera();
+          setEditPrompt("");
+          closeCamera();
+        }).catch(err => {
+          console.error("Resize error:", err);
+          alert("写真の処理に失敗しました。もう一度お試しください。");
+        });
       }
     }
   };
@@ -185,7 +191,7 @@ const StepGen: React.FC<StepGenProps> = ({ data, updateData, onNext, onBack }) =
       updateBudgetDisplay();
     } catch (e: any) {
       console.error(e);
-      alert(`イラスト変換に失敗しました詳細:\n${e.message}`);
+      alert(`イラスト変換に失敗しました。\nエラー: ${e.message}\n(詳細: ${e.name})`);
     } finally {
       setIsGenerating(false);
     }
@@ -208,7 +214,7 @@ const StepGen: React.FC<StepGenProps> = ({ data, updateData, onNext, onBack }) =
       updateBudgetDisplay();
     } catch (e: any) {
       console.error(e);
-      alert(`画像の編集に失敗しました詳細:\n${e.message}`);
+      alert(`画像の編集に失敗しました。\nエラー: ${e.message}\n(詳細: ${e.name})`);
     } finally {
       setIsGenerating(false);
     }

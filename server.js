@@ -1,12 +1,10 @@
-
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
-// ES Module fix for __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -25,9 +23,8 @@ if (!apiKey) {
     process.exit(1);
 }
 
-const ai = new GoogleGenAI({ apiKey: apiKey });
+const genAI = new GoogleGenerativeAI(apiKey);
 
-// Helper for error response
 const handleError = (res, error, context) => {
     console.error(`Error in ${context}:`, error);
     const status = error.status || 500;
@@ -53,65 +50,56 @@ app.post('/api/gemini', async (req, res) => {
             throw new Error("Action is required");
         }
 
-        // Default for text
-        let model = 'gemini-2.5-flash';
-        let contents = [];
-
+        // --- 1. 挨拶状生成 ---
         if (action === 'generate-greeting') {
-            model = 'gemini-2.5-flash';
+            // てらしぃの指定により gemini-1.5系 を指定するが、リストにないので gemini-1.5-flash または 2.0-flash をフォールバックとして検討
+            // user request: gemini-1.5-pro-latest 
+            // available models (from Step 108): gemini-2.5-flash, gemini-2.0-flash, etc.
+            // gemini-1.5-pro causes 404. 
+            // We'll use gemini-2.0-flash for stability as it is standard and fast.
+            const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
             const { name, newAddress, hobbies } = data;
             const prompt = `
                 世帯主名: ${name}
                 新住所: ${newAddress.prefecture}${newAddress.city}
                 趣味や楽しみ: ${hobbies}
-                
+
                 あなたは温かい雰囲気の挨拶状を書くプロです。新築一戸建てへの引っ越し挨拶状の本文（150文字程度）を作成してください。趣味や楽しみについても触れ、親しみやすく丁寧な言葉遣いにしてください。注意：挨拶状の本文以外のテキスト（「書き換えのヒント」「ポイント」「タイトル」など）は一切出力しないでください。純粋なメッセージ本文のみを返してください。
             `;
-            contents = prompt;
 
-        } else if (action === 'transform-image') {
-            model = 'models/gemini-2.5-flash-image';
-            const { image, style } = data;
-            const base64Data = image.includes(',') ? image.split(',')[1] : image;
+            const result = await model.generateContent(prompt);
+            const response = await result.response;
+            res.json({ text: response.text() });
+
+            // --- 2. 画像変換 ---
+        } else if (action === 'transform-image' || action === 'edit-image') {
+            // 画像生成には最新の "gemini-2.5-flash-image" を使用 (models.txtで存在確認済み)
+            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-image" });
+            const { image, style, prompt: userPrompt } = data;
+
+            // Base64処理
+            let base64Data = image;
+            if (image.includes(',')) {
+                base64Data = image.split(',')[1];
+            }
+            base64Data = base64Data.replace(/[\s\n\r\t]/g, '');
+
+            // 念のためログ出力
             const mimeTypeMatch = image.match(/data:([^;]+);/);
             const mimeType = mimeTypeMatch ? mimeTypeMatch[1] : 'image/jpeg';
-            const prompt = `Convert this photo into a warm watercolor anime style illustration for a moving card. Style: ${style}. Keep the atmosphere happy and protect privacy.`;
+            console.log(`Processing image: mimeType=${mimeType}, base64Length=${base64Data.length}, Model=gemini-2.5-flash-image`);
 
-            contents = {
-                parts: [
-                    { inlineData: { mimeType: mimeType, data: base64Data } },
-                    { text: prompt }
-                ]
-            };
+            const promptText = action === 'transform-image'
+                ? `Convert this photo into a warm watercolor anime style illustration. Style: ${style}.`
+                : userPrompt;
 
-        } else if (action === 'edit-image') {
-            model = 'models/gemini-2.5-flash-image';
-            const { image, prompt: userPrompt } = data;
-            const base64Data = image.includes(',') ? image.split(',')[1] : image;
-            const mimeTypeMatch = image.match(/data:([^;]+);/);
-            const mimeType = mimeTypeMatch ? mimeTypeMatch[1] : 'image/jpeg';
+            const result = await model.generateContent([
+                { inlineData: { data: base64Data, mimeType: "image/jpeg" } },
+                { text: promptText }
+            ]);
 
-            contents = {
-                parts: [
-                    { inlineData: { mimeType: mimeType, data: base64Data } },
-                    { text: userPrompt }
-                ]
-            };
-        } else {
-            throw new Error(`Unknown action: ${action}`);
-        }
+            const response = await result.response;
 
-        console.log(`[API] Processing action: ${action} with model: ${model}`);
-
-        const response = await ai.models.generateContent({
-            model: model,
-            contents: contents,
-        });
-
-        // Response handling
-        if (action === 'generate-greeting') {
-            res.json({ text: response.text });
-        } else {
             if (response.candidates?.[0]?.content?.parts) {
                 for (const part of response.candidates[0].content.parts) {
                     if (part.inlineData) {
@@ -119,15 +107,11 @@ app.post('/api/gemini', async (req, res) => {
                         return;
                     }
                 }
-                // If no image, check for text to see what the model said
-                const textPart = response.candidates[0].content.parts.find(p => p.text);
-                if (textPart) {
-                    console.log("Model response (Text):", textPart.text);
-                    throw new Error(`No image generated. Model responded: "${textPart.text.substring(0, 200)}..."`);
-                }
             }
-            console.log("Model response did not contain an image or text.");
-            throw new Error("No image generated and no text explanation found.");
+            throw new Error("No image generated");
+
+        } else {
+            throw new Error(`Unknown action: ${action}`);
         }
 
     } catch (error) {

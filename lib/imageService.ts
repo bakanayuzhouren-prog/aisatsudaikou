@@ -26,16 +26,16 @@ export const resizeImage = (file: File, maxWidth = 1600, quality = 0.8): Promise
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         if (!ctx) {
-            reject(new Error("Could not get canvas context"));
-            return;
+          reject(new Error("Could not get canvas context"));
+          return;
         }
 
         // Fill white background for transparent PNGs converted to JPEG
         ctx.fillStyle = '#FFFFFF';
         ctx.fillRect(0, 0, width, height);
-        
+
         ctx.drawImage(img, 0, 0, width, height);
-        
+
         // Compress to JPEG to save space
         resolve(canvas.toDataURL('image/jpeg', quality));
       };
@@ -53,7 +53,7 @@ export const resizeImage = (file: File, maxWidth = 1600, quality = 0.8): Promise
  * effectively "zooming in" or "rotating".
  */
 export const cropImage = async (
-  imageData: string, 
+  imageData: string,
   config: { scale: number, x: number, y: number, rotation: number }
 ): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -65,14 +65,14 @@ export const cropImage = async (
 
       const width = img.width;
       const height = img.height;
-      
+
       canvas.width = width;
       canvas.height = height;
-      
+
       // Background white
       ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, width, height);
-      
+
       ctx.save();
       // Move to center
       ctx.translate(width / 2, height / 2);
@@ -83,10 +83,55 @@ export const cropImage = async (
       // Draw image centered
       ctx.drawImage(img, -width / 2, -height / 2);
       ctx.restore();
-      
+
       resolve(canvas.toDataURL('image/jpeg', 0.9));
     };
     img.onerror = () => reject('Failed to load image for cropping');
     img.src = imageData;
+  });
+};
+
+/**
+ * Resizes a base64 string to a maximum width/height.
+ * Used for camera images or existing base64 strings.
+ */
+export const resizeBase64 = (base64Data: string, maxWidth = 1600, quality = 0.8): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+
+      // Maintain aspect ratio
+      if (width > maxWidth || height > maxWidth) {
+        if (width > height) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        } else {
+          width = Math.round((width * maxWidth) / height);
+          height = maxWidth;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error("Could not get canvas context"));
+        return;
+      }
+
+      // Fill white background
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // Compress to JPEG
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => reject(new Error("Failed to load base64 image"));
+    img.src = base64Data;
   });
 };
