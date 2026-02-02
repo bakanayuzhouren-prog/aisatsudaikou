@@ -20,6 +20,7 @@ const StepGen: React.FC<StepGenProps> = ({ data, updateData, onNext, onBack }) =
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [activeMemberId, setActiveMemberId] = useState<string | null>(null); // For individual mode camera
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
 
@@ -69,18 +70,32 @@ const StepGen: React.FC<StepGenProps> = ({ data, updateData, onNext, onBack }) =
     }
   };
 
-  const openCamera = async (memberId: string | null = null) => {
-    setActiveMemberId(memberId);
+  const startCamera = async (mode: 'user' | 'environment') => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' } // Prefer back camera
+        video: { facingMode: mode }
       });
       setCameraStream(stream);
-      setIsCameraOpen(true);
     } catch (err) {
       console.error("Camera Error:", err);
       alert("カメラの起動に失敗しました。カメラへのアクセスを許可してください。\n(HTTPSまたはlocalhost環境でのみ動作します)");
     }
+  };
+
+  const openCamera = async (memberId: string | null = null) => {
+    setActiveMemberId(memberId);
+    setFacingMode('environment'); // Reset to back camera by default
+    await startCamera('environment');
+    setIsCameraOpen(true);
+  };
+
+  const switchCamera = async () => {
+    const newMode = facingMode === 'user' ? 'environment' : 'user';
+    setFacingMode(newMode);
+    await startCamera(newMode);
   };
 
   const closeCamera = () => {
@@ -101,7 +116,19 @@ const StepGen: React.FC<StepGenProps> = ({ data, updateData, onNext, onBack }) =
         // Match canvas size to video resolution
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
+
+        // Mirror image if using front camera
+        if (facingMode === 'user') {
+          context.translate(canvas.width, 0);
+          context.scale(-1, 1);
+        }
+
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        // Reset transformation if needed (though context is scoped here, good practice)
+        if (facingMode === 'user') {
+          context.setTransform(1, 0, 0, 1, 0, 0);
+        }
 
         // Convert to base64
         const rawImageData = canvas.toDataURL('image/jpeg', 0.85); // 0.85 quality
@@ -511,13 +538,21 @@ const StepGen: React.FC<StepGenProps> = ({ data, updateData, onNext, onBack }) =
       {isCameraOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex flex-col items-center justify-center p-4 animate-fade-in">
           <div className="bg-white p-4 rounded-2xl max-w-lg w-full shadow-2xl">
-            <h3 className="text-center font-bold text-gray-800 mb-4">写真を撮影</h3>
+            <h3 className="text-center font-bold text-gray-800 mb-4 flex items-center justify-center gap-2">
+              <span>写真を撮影</span>
+              <button
+                onClick={switchCamera}
+                className="ml-2 text-xs bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded-full flex items-center gap-1 transition-colors"
+              >
+                🔄 {facingMode === 'environment' ? 'インカメへ' : '外カメへ'}
+              </button>
+            </h3>
             <div className="relative aspect-[3/4] bg-black rounded-xl overflow-hidden mb-6 shadow-inner border border-gray-200">
               <video
                 ref={videoRef}
                 autoPlay
                 playsInline
-                className="w-full h-full object-cover"
+                className={`w-full h-full object-cover transition-transform duration-300 ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
               />
               <canvas ref={canvasRef} className="hidden" />
             </div>
