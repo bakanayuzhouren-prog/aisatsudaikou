@@ -16,6 +16,12 @@ const PORT = 3001;
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
+// Request logging middleware
+app.use((req, res, next) => {
+    console.log(`[Request] ${req.method} ${req.url}`);
+    next();
+});
+
 const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
 
 if (!apiKey) {
@@ -44,6 +50,7 @@ const handleError = (res, error, context) => {
 
 app.post('/api/gemini', async (req, res) => {
     try {
+        console.log(`[API] Received Gemini request: ${req.body.action}`);
         const { action, ...data } = req.body;
 
         if (!action) {
@@ -52,11 +59,6 @@ app.post('/api/gemini', async (req, res) => {
 
         // --- 1. 挨拶状生成 ---
         if (action === 'generate-greeting') {
-            // てらしぃの指定により gemini-1.5系 を指定するが、リストにないので gemini-1.5-flash または 2.0-flash をフォールバックとして検討
-            // user request: gemini-1.5-pro-latest 
-            // available models (from Step 108): gemini-2.5-flash, gemini-2.0-flash, etc.
-            // gemini-1.5-pro causes 404. 
-            // We'll use gemini-2.0-flash for stability as it is standard and fast.
             const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
             const { name, newAddress, hobbies } = data;
             const prompt = `
@@ -73,7 +75,6 @@ app.post('/api/gemini', async (req, res) => {
 
             // --- 2. 画像変換 ---
         } else if (action === 'transform-image' || action === 'edit-image') {
-            // 画像生成には最新の "gemini-2.5-flash-image" を使用 (models.txtで存在確認済み)
             const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-image" });
             const { image, style, prompt: userPrompt } = data;
 
@@ -119,6 +120,7 @@ app.post('/api/gemini', async (req, res) => {
     }
 });
 
-app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+// Bind to 0.0.0.0 to accept connections from outside localhost (e.g. mobile via LAN)
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
 });

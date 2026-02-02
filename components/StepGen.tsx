@@ -70,26 +70,38 @@ const StepGen: React.FC<StepGenProps> = ({ data, updateData, onNext, onBack }) =
     }
   };
 
-  const startCamera = async (mode: 'user' | 'environment') => {
+  const startCamera = async (mode: 'user' | 'environment'): Promise<boolean> => {
     if (cameraStream) {
       cameraStream.getTracks().forEach(track => track.stop());
     }
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert("お使いのブラウザはカメラ機能をサポートしていません。");
+      return false;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: mode }
       });
       setCameraStream(stream);
+      return true;
     } catch (err) {
       console.error("Camera Error:", err);
-      alert("カメラの起動に失敗しました。カメラへのアクセスを許可してください。\n(HTTPSまたはlocalhost環境でのみ動作します)");
+      alert("カメラの起動に失敗しました。\n・カメラへのアクセスを許可してください\n・HTTPSまたはlocalhost環境でのみ動作します\n・他のアプリでカメラを使用中の場合は閉じてください");
+      return false;
     }
   };
 
   const openCamera = async (memberId: string | null = null) => {
     setActiveMemberId(memberId);
     setFacingMode('environment'); // Reset to back camera by default
-    await startCamera('environment');
-    setIsCameraOpen(true);
+    const success = await startCamera('environment');
+    if (success) {
+      setIsCameraOpen(true);
+    } else {
+      setActiveMemberId(null);
+    }
   };
 
   const switchCamera = async () => {
