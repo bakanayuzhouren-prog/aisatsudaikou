@@ -34,6 +34,9 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       return (
         <div style={{ padding: 40, textAlign: 'center' }}>
           <h1>エラーが発生しました</h1>
+          <p style={{ color: 'red', margin: '20px 0', whiteSpace: 'pre-wrap' }}>
+            {this.state.error?.toString()}
+          </p>
           <button onClick={() => window.location.reload()}>再読み込み</button>
         </div>
       );

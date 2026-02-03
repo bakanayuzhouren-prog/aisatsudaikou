@@ -1,7 +1,7 @@
 /**
  * Resizes and compresses an image file to avoid memory issues and reduce API payload size.
  */
-export const resizeImage = (file: File, maxWidth = 1600, quality = 0.8): Promise<string> => {
+export const resizeImage = (file: File, maxWidth = 1024, quality = 0.8): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -95,7 +95,7 @@ export const cropImage = async (
  * Resizes a base64 string to a maximum width/height.
  * Used for camera images or existing base64 strings.
  */
-export const resizeBase64 = (base64Data: string, maxWidth = 1600, quality = 0.8): Promise<string> => {
+export const resizeBase64 = (base64Data: string, maxWidth = 1024, quality = 0.8): Promise<string> => {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {

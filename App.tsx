@@ -70,7 +70,11 @@ function App() {
 
   useEffect(() => {
     if (isLoaded) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(formData));
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(formData));
+      } catch (e) {
+        console.warn("LocalStorage save failed (likely quota exceeded):", e);
+      }
     }
   }, [formData, isLoaded]);
 

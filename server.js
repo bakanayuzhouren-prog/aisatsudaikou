@@ -86,7 +86,7 @@ app.post('/api/gemini', async (req, res) => {
 
             // --- 2. 画像変換 ---
         } else if (action === 'transform-image' || action === 'edit-image') {
-            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-image" });
+            const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
             const { image, style, prompt: userPrompt } = data;
 
             // Base64処理

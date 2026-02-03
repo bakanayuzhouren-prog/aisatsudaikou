@@ -1,33 +1,81 @@
-
 <!DOCTYPE html>
 <html lang="ja">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>AI 引っ越し挨拶状メーカー</title>
-    <link rel="manifest" href="./manifest.json" />
-    <meta name="theme-color" content="#16A34A" />
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-      @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap');
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>AI 引っ越し挨拶状メーカー</title>
+  <link rel="manifest" href="./manifest.json" />
+  <meta name="theme-color" content="#16A34A" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap');
+
+    body {
+      font-family: 'Noto Sans JP', sans-serif;
+      background-color: #f9fafb;
+    }
+
+    @media print {
+      @page {
+        size: auto;
+        margin: 0mm;
+      }
+
+      /* Hide everything by default */
+      body * {
+        visibility: hidden;
+      }
+
+      /* Completely remove non-print elements from flow to prevent blank pages */
+      .no-print {
+        display: none !important;
+      }
+
+      /* Reset body margins */
       body {
-        font-family: 'Noto Sans JP', sans-serif;
-        background-color: #f9fafb;
+        margin: 0;
+        padding: 0;
       }
-      @media print {
-        .no-print { display: none !important; }
-        .print-area { 
-          margin: 0 !important; 
-          box-shadow: none !important; 
-          border: none !important;
-          width: 100% !important; 
-          height: 100% !important; 
-        }
-        body { background: white !important; }
+
+      /* Show print area and its children */
+      .print-area,
+      .print-area * {
+        visibility: visible;
       }
-      .animate-fade-in { animation: fadeIn 0.5s ease-out; }
-      @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    </style>
+
+      /* Position print area at the absolute top (centered horizontally) */
+      .print-area {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        margin: 0 auto !important;
+        padding: 0 !important;
+        overflow: visible !important;
+        break-inside: avoid;
+        page-break-inside: avoid;
+        /* Ensure it sits on top of anything else */
+        z-index: 9999 !important;
+      }
+    }
+
+    .animate-fade-in {
+      animation: fadeIn 0.5s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  </style>
   <script type="importmap">
 {
   "imports": {
@@ -40,11 +88,13 @@
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
+  <link rel="stylesheet" href="/index.css">
 </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="./index.tsx"></script>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="./index.tsx"></script>
   <script type="module" src="/index.tsx"></script>
 </body>
+
 </html>

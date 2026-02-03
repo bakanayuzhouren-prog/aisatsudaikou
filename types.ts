@@ -6,11 +6,18 @@ export interface AddressData {
   addressLine: string; // Rest of the address
 }
 
+export interface MemberLayout {
+  x: number;
+  y: number;
+  scale: number;
+}
+
 export interface FamilyMember {
   id: string;
   originalImage: string | null;
   processedImage: string | null;
   profile: string; // e.g. "趣味：サッカー"
+  layout?: MemberLayout;
 }
 
 export type IllustrationStyle = 'standard' | 'casual' | 'simple' | 'luxury';

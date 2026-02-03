@@ -19,6 +19,7 @@ const StepGen: React.FC<StepGenProps> = ({ data, updateData, onNext, onBack }) =
   // Camera State
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [activeMemberId, setActiveMemberId] = useState<string | null>(null); // For individual mode camera
+  const [loadingMemberId, setLoadingMemberId] = useState<string | null>(null); // For individual image transformation
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
   const videoRef = React.useRef<HTMLVideoElement>(null);
@@ -216,25 +217,73 @@ const StepGen: React.FC<StepGenProps> = ({ data, updateData, onNext, onBack }) =
     updateData({ familyMembers: updatedMembers });
   };
 
-  const handleTransform = async () => {
-    if (!data.originalImage) return;
+  // Progress state for batch operations
+  const [progressStatus, setProgressStatus] = useState("");
+
+  const handleSingleTransform = async (memberId: string) => {
+    const member = data.familyMembers.find(m => m.id === memberId);
+    if (!member || !member.originalImage) return;
 
     if (!checkBudget(COSTS.IMAGE)) {
-      alert("今月の利用限度額（500円）以内で実行できません。\n来月までお待ちください。");
+      alert("今月の利用限度額（500円）に達しました。");
+      return;
+    }
+
+    setLoadingMemberId(memberId);
+    try {
+      // 1.5s delay for safety
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      const processed = await transformImageToIllustration(member.originalImage, data.illustrationStyle);
+
+      // Strict validation
+      if (typeof processed !== 'string' || processed.length === 0) {
+        throw new Error("AI returned invalid image data");
+      }
+
+      // Safe state update
+      const updatedMembers = data.familyMembers.map(m =>
+        m.id === memberId ? { ...m, processedImage: processed } : m
+      );
+      updateData({ familyMembers: updatedMembers });
+
+      addCost(COSTS.IMAGE);
+      updateBudgetDisplay();
+
+    } catch (e: any) {
+      console.error(e);
+      alert(`変換に失敗しました: ${e.message}`);
+    } finally {
+      setLoadingMemberId(null);
+    }
+  };
+
+  const handleTransform = async () => {
+    if (data.photoMode === 'group' && !data.originalImage) return;
+
+    // Check budget for single group image
+    if (!checkBudget(COSTS.IMAGE)) {
+      alert(`今月の利用限度額（残り${Math.floor(budgetInfo.remaining)}円）では足りません。`);
       return;
     }
 
     setIsGenerating(true);
+    setProgressStatus("準備中...");
+
     try {
-      const processed = await transformImageToIllustration(data.originalImage, data.illustrationStyle);
-      updateData({ processedImage: processed });
-      addCost(COSTS.IMAGE);
-      updateBudgetDisplay();
+      if (data.photoMode === 'group' && data.originalImage) {
+        setProgressStatus("画像を変換中...");
+        const processed = await transformImageToIllustration(data.originalImage, data.illustrationStyle);
+        updateData({ processedImage: processed });
+        addCost(COSTS.IMAGE);
+        updateBudgetDisplay();
+      }
     } catch (e: any) {
       console.error(e);
-      alert(`イラスト変換に失敗しました。\nエラー: ${e.message}\n(詳細: ${e.name})`);
+      alert(`イラスト変換に失敗しました。\nエラー: ${e.message}`);
     } finally {
       setIsGenerating(false);
+      setProgressStatus("");
     }
   };
 
@@ -411,6 +460,18 @@ const StepGen: React.FC<StepGenProps> = ({ data, updateData, onNext, onBack }) =
                             >
                               📸 撮影
                             </button>
+                            {member.originalImage && (
+                              <button
+                                onClick={() => handleSingleTransform(member.id)}
+                                disabled={!!loadingMemberId || !!member.processedImage}
+                                className={`px-2 py-1 rounded text-[10px] font-bold shadow-sm transition flex items-center gap-1 ${member.processedImage
+                                  ? 'bg-green-100 text-green-700 border border-green-200 cursor-default'
+                                  : 'bg-gradient-to-r from-yellow-400 to-yellow-500 text-white hover:from-yellow-500 hover:to-yellow-600'
+                                  }`}
+                              >
+                                {loadingMemberId === member.id ? '⌛' : member.processedImage ? '✅ 変換済' : '✨ AI変換'}
+                              </button>
+                            )}
                           </div>
                         </div>
                         <input
@@ -427,7 +488,8 @@ const StepGen: React.FC<StepGenProps> = ({ data, updateData, onNext, onBack }) =
               </div>
             )}
 
-            {data.originalImage && (
+            {/* イラスト変換UI: 画像がひとつでもあれば表示 */}
+            {((data.photoMode === 'group' && data.originalImage) || (data.photoMode === 'individual' && data.familyMembers.some(m => m.originalImage))) && (
               <div className="space-y-4 animate-fade-in">
                 <div className="p-4 bg-red-50 rounded-xl border border-red-100 space-y-3">
                   <div className="flex items-center justify-between">
@@ -459,13 +521,20 @@ const StepGen: React.FC<StepGenProps> = ({ data, updateData, onNext, onBack }) =
                       </button>
                     ))}
                   </div>
-                  <button
-                    onClick={handleTransform}
-                    disabled={isGenerating || budgetInfo.remaining < COSTS.IMAGE}
-                    className="w-full bg-red-600 text-white py-3 rounded-lg font-bold shadow-md hover:bg-red-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    {isGenerating ? "変換中..." : "イラスト風に変換実行 (約7円)"}
-                  </button>
+                  {data.photoMode === 'group' && (
+                    <button
+                      onClick={handleTransform}
+                      disabled={isGenerating || budgetInfo.remaining < COSTS.IMAGE}
+                      className="w-full bg-red-600 text-white py-3 rounded-lg font-bold shadow-md hover:bg-red-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {isGenerating ? (progressStatus || "変換中...") : "イラスト風に変換実行 (約7円)"}
+                    </button>
+                  )}
+                  {data.photoMode === 'individual' && (
+                    <div className="text-xs text-gray-500 text-center bg-yellow-50 p-2 rounded border border-yellow-200">
+                      💡 上のリストの「✨ AI変換」ボタンを押して、1枚ずつ変換してください。
+                    </div>
+                  )}
                 </div>
 
                 <div className="p-4 bg-gray-100 rounded-xl border border-gray-200 space-y-3">
@@ -508,14 +577,41 @@ const StepGen: React.FC<StepGenProps> = ({ data, updateData, onNext, onBack }) =
               style={{ ...aspectRatioStyle, backgroundColor: data.backgroundColor }}
             >
               <div className="h-[45%] bg-gray-100 mb-6 overflow-hidden rounded-sm border border-gray-200 relative shadow-inner group">
-                {data.processedImage ? (
-                  <img src={data.processedImage} className={`w-full h-full animate-fade-in ${data.objectFit === 'cover' ? 'object-cover' : 'object-contain'}`} alt="Preview" />
-                ) : data.originalImage ? (
-                  <img src={data.originalImage} className={`w-full h-full opacity-40 ${data.objectFit === 'cover' ? 'object-cover' : 'object-contain'}`} alt="Draft" />
-                ) : (
-                  <div className="h-full flex flex-col items-center justify-center text-gray-300">
-                    <span className="text-4xl mb-2">🏡</span>
+                {data.photoMode === 'individual' ? (
+                  <div className="w-full h-full grid grid-cols-2 gap-1 p-1 content-start overflow-y-auto">
+                    {data.familyMembers.filter(m => m.originalImage).map((member, i) => (
+                      <div key={member.id} className="relative aspect-square overflow-hidden group">
+                        <img
+                          src={member.processedImage || member.originalImage || ''}
+                          className="w-full h-full object-cover"
+                          alt={`Member ${i + 1}`}
+                        />
+                        <div className="absolute bottom-0 inset-x-0 bg-white/80 backdrop-blur-[2px] py-1 text-center pointer-events-none">
+                          <p className="text-[8px] font-bold text-gray-800 leading-tight whitespace-pre-wrap font-sans">
+                            {member.profile || `メンバー${i + 1}`}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                    {data.familyMembers.filter(m => m.originalImage).length === 0 && (
+                      <div className="col-span-2 h-full flex flex-col items-center justify-center text-gray-300">
+                        <span className="text-2xl mb-2">👥</span>
+                        <span className="text-xs">写真がありません</span>
+                      </div>
+                    )}
                   </div>
+                ) : (
+                  <>
+                    {data.processedImage ? (
+                      <img src={data.processedImage} className={`w-full h-full animate-fade-in ${data.objectFit === 'cover' ? 'object-cover' : 'object-contain'}`} alt="Preview" />
+                    ) : data.originalImage ? (
+                      <img src={data.originalImage} className={`w-full h-full opacity-40 ${data.objectFit === 'cover' ? 'object-cover' : 'object-contain'}`} alt="Draft" />
+                    ) : (
+                      <div className="h-full flex flex-col items-center justify-center text-gray-300">
+                        <span className="text-4xl mb-2">🏡</span>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -549,44 +645,46 @@ const StepGen: React.FC<StepGenProps> = ({ data, updateData, onNext, onBack }) =
       </div>
 
       {/* Camera Modal */}
-      {isCameraOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex flex-col items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white p-4 rounded-2xl max-w-lg w-full shadow-2xl">
-            <h3 className="text-center font-bold text-gray-800 mb-4 flex items-center justify-center gap-2">
-              <span>写真を撮影</span>
-              <button
-                onClick={switchCamera}
-                className="ml-2 text-xs bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded-full flex items-center gap-1 transition-colors"
-              >
-                🔄 {facingMode === 'environment' ? 'インカメへ' : '外カメへ'}
-              </button>
-            </h3>
-            <div className="relative aspect-[3/4] bg-black rounded-xl overflow-hidden mb-6 shadow-inner border border-gray-200">
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                className={`w-full h-full object-cover transition-transform duration-300 ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
-              />
-              <canvas ref={canvasRef} className="hidden" />
-            </div>
-            <div className="flex justify-between gap-4">
-              <button
-                onClick={closeCamera}
-                className="flex-1 py-3 rounded-lg font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition"
-              >
-                キャンセル
-              </button>
-              <button
-                onClick={takePhoto}
-                className="flex-1 py-3 rounded-lg font-bold text-white bg-red-600 hover:bg-red-700 shadow-lg transition flex items-center justify-center gap-2"
-              >
-                <span>📸</span> 撮影する
-              </button>
+      {
+        isCameraOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex flex-col items-center justify-center p-4 animate-fade-in">
+            <div className="bg-white p-4 rounded-2xl max-w-lg w-full shadow-2xl">
+              <h3 className="text-center font-bold text-gray-800 mb-4 flex items-center justify-center gap-2">
+                <span>写真を撮影</span>
+                <button
+                  onClick={switchCamera}
+                  className="ml-2 text-xs bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded-full flex items-center gap-1 transition-colors"
+                >
+                  🔄 {facingMode === 'environment' ? 'インカメへ' : '外カメへ'}
+                </button>
+              </h3>
+              <div className="relative aspect-[3/4] bg-black rounded-xl overflow-hidden mb-6 shadow-inner border border-gray-200">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  className={`w-full h-full object-cover transition-transform duration-300 ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
+                />
+                <canvas ref={canvasRef} className="hidden" />
+              </div>
+              <div className="flex justify-between gap-4">
+                <button
+                  onClick={closeCamera}
+                  className="flex-1 py-3 rounded-lg font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition"
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={takePhoto}
+                  className="flex-1 py-3 rounded-lg font-bold text-white bg-red-600 hover:bg-red-700 shadow-lg transition flex items-center justify-center gap-2"
+                >
+                  <span>📸</span> 撮影する
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
     </div >
   );
 };

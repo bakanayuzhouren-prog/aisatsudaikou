@@ -46,7 +46,11 @@ export const getUsage = (): BudgetData => {
 };
 
 const saveUsage = (data: BudgetData) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch (e) {
+        console.error("Failed to save budget usage:", e);
+    }
 };
 
 export const checkBudget = (additionalCost: number): boolean => {

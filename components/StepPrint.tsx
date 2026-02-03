@@ -17,10 +17,13 @@ const StepPrint: React.FC<StepPrintProps> = ({ data, updateData, onBack }) => {
   const imageRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
 
+  // State for selected member in individual mode
+  const [selectedMemberId, setSelectedMemberId] = React.useState<string | null>(null);
+
   // Conversion factor: 1mm is roughly 3.78px on screen (96dpi). 
   // However, since we might be scaled down, or to keep it controllable, we use a factor.
   // Using 3 seems to provide a decent "feel" for 1mm increments.
-  const PX_PER_MM = 3.0;
+  const PX_PER_MM = 3.78;
 
   // Default values
   const layout = data.layout || {
@@ -31,8 +34,34 @@ const StepPrint: React.FC<StepPrintProps> = ({ data, updateData, onBack }) => {
     paperSize: 'postcard'
   };
 
-  const updateLayout = (partial: Partial<typeof layout> | any) => {
-    updateData({ layout: { ...layout, ...partial } });
+  // Helper to get current target layout
+  const getTargetLayout = () => {
+    if (data.photoMode === 'individual' && selectedMemberId) {
+      const member = data.familyMembers.find(m => m.id === selectedMemberId);
+      return member?.layout || { x: 0, y: 0, scale: 100 };
+    }
+    return layout;
+  };
+
+  const targetLayout = getTargetLayout();
+
+  // Helper to update layout (global or individual)
+  const handleImageSettingChange = (key: 'x' | 'y' | 'scale', value: number) => {
+    if (data.photoMode === 'individual' && selectedMemberId) {
+      // Update individual member
+      const updatedMembers = data.familyMembers.map(m => {
+        if (m.id === selectedMemberId) {
+          const currentLayout = m.layout || { x: 0, y: 0, scale: 100 };
+          return { ...m, layout: { ...currentLayout, [key]: value } };
+        }
+        return m;
+      });
+      updateData({ familyMembers: updatedMembers });
+    } else {
+      // Update global layout
+      const keyMap = { x: 'imageX', y: 'imageY', scale: 'imageScale' };
+      updateData({ layout: { ...layout, [keyMap[key]]: value } });
+    }
   };
 
   const updateMessageLayout = (partial: Partial<typeof layout.message>) => {
@@ -51,9 +80,10 @@ const StepPrint: React.FC<StepPrintProps> = ({ data, updateData, onBack }) => {
     const mmY = Math.round(data.y / PX_PER_MM);
 
     if (info === 'image') {
-      updateLayout({ imageX: mmX, imageY: mmY });
+      handleImageSettingChange('x', mmX);
+      handleImageSettingChange('y', mmY);
     } else {
-      updateLayout({ textContainerX: mmX, textContainerY: mmY });
+      updateData({ layout: { ...layout, textContainerX: mmX, textContainerY: mmY } });
     }
   };
 
@@ -68,32 +98,44 @@ const StepPrint: React.FC<StepPrintProps> = ({ data, updateData, onBack }) => {
 
         {/* Image Controls */}
         <div className="space-y-3">
-          <label className="text-xs font-bold text-green-700 block bg-green-50 p-1 rounded">画像設定</label>
+          <label className="text-xs font-bold text-green-700 flex items-center justify-between bg-green-50 p-1 rounded">
+            <span>画像設定 {selectedMemberId ? '(個別)' : '(全体)'}</span>
+            {selectedMemberId && (
+              <button
+                onClick={() => setSelectedMemberId(null)}
+                className="text-[10px] bg-green-200 px-1 rounded hover:bg-green-300"
+              >
+                選択解除
+              </button>
+            )}
+          </label>
           <div className="flex items-center justify-between">
             <span className="text-xs text-gray-500">拡大・縮小</span>
             <input
-              type="range" min="50" max="200" step="5"
-              value={layout.imageScale || 100}
-              onChange={(e) => updateLayout({ imageScale: parseInt(e.target.value) })}
+              type="range" min="20" max="300" step="5"
+              value={('scale' in targetLayout ? targetLayout.scale : targetLayout.imageScale) || 100}
+              onChange={(e) => handleImageSettingChange('scale', parseInt(e.target.value))}
               className="w-24 accent-green-600"
             />
-            <span className="text-xs w-8 text-right">{layout.imageScale || 100}%</span>
+            <span className="text-xs w-8 text-right">{('scale' in targetLayout ? targetLayout.scale : targetLayout.imageScale) || 100}%</span>
           </div>
 
           <div className="grid grid-cols-2 gap-2 mt-2">
             <label className="flex items-center justify-between text-xs text-gray-500">
               <span>↔️ 左右(mm)</span>
               <input
-                type="number" value={layout.imageX}
-                onChange={(e) => updateLayout({ imageX: parseInt(e.target.value) })}
+                type="number"
+                value={('x' in targetLayout ? targetLayout.x : targetLayout.imageX) || 0}
+                onChange={(e) => handleImageSettingChange('x', parseInt(e.target.value))}
                 className="w-12 border rounded px-1 text-right"
               />
             </label>
             <label className="flex items-center justify-between text-xs text-gray-500">
               <span>↕️ 上下(mm)</span>
               <input
-                type="number" value={layout.imageY}
-                onChange={(e) => updateLayout({ imageY: parseInt(e.target.value) })}
+                type="number"
+                value={('y' in targetLayout ? targetLayout.y : targetLayout.imageY) || 0}
+                onChange={(e) => handleImageSettingChange('y', parseInt(e.target.value))}
                 className="w-12 border rounded px-1 text-right"
               />
             </label>
@@ -189,37 +231,174 @@ const StepPrint: React.FC<StepPrintProps> = ({ data, updateData, onBack }) => {
             width: width,
             height: height,
             backgroundColor: data.backgroundColor,
-            padding: isA4 ? '12mm' : '6mm'
+            padding: 0 // Remove padding to allow full usage
           }}
         >
-          {/* Draggable Image Section */}
-          <Draggable
-            nodeRef={imageRef}
-            position={{ x: layout.imageX * PX_PER_MM, y: layout.imageY * PX_PER_MM }}
-            onStop={(e, d) => handleDrag('image', e, d)}
-            bounds="parent" // Optional: constrain to paper
-          >
-            <div
-              ref={imageRef}
-              className="relative cursor-move hover:ring-2 hover:ring-green-400 transition-shadow duration-200"
-              style={{
-                height: '40%', // Initial height base
-                marginBottom: '4mm',
-                transformOrigin: 'center center',
-              }}
-            >
-              {(data.processedImage || data.originalImage) && (
-                <img
-                  src={data.processedImage || data.originalImage || ''}
-                  className="w-full h-full pointer-events-none" // pointer-events-none essential for drag
-                  style={{
-                    objectFit: layout.imageObjectFit,
-                    transform: `scale(${(layout.imageScale || 100) / 100})`
+          {/* Images Section */}
+          {data.photoMode === 'individual' ? (
+            // Individual Mode: Multiple Draggable Images
+            data.familyMembers.filter(m => m.originalImage).map((member, i) => {
+              // Create a ref for this member if it doesn't exist
+              const memberRef = React.createRef<HTMLDivElement>();
+
+              // Default positions if not set
+              const defaultX = (i % 2) * 50; // Simple grid-like default
+              const defaultY = Math.floor(i / 2) * 60;
+              const x = member.layout?.x ?? defaultX;
+              const y = member.layout?.y ?? defaultY;
+              const scale = member.layout?.scale ?? 100;
+
+              return (
+                <Draggable
+                  key={member.id}
+                  nodeRef={memberRef}
+                  position={{ x: x * PX_PER_MM, y: y * PX_PER_MM }}
+                  onStop={(e, d) => {
+                    const mmX = Math.round(d.x / PX_PER_MM);
+                    const mmY = Math.round(d.y / PX_PER_MM);
+                    const newLayout = { ...member.layout, x: mmX, y: mmY, scale: scale };
+                    // Update member layout
+                    const updatedMembers = data.familyMembers.map(m =>
+                      m.id === member.id ? { ...m, layout: newLayout } : m
+                    );
+                    updateData({ familyMembers: updatedMembers });
+                    // Select on drag end as well
+                    setSelectedMemberId(member.id);
                   }}
-                />
-              )}
-            </div>
-          </Draggable>
+                  onStart={() => setSelectedMemberId(member.id)}
+                  bounds="parent"
+                >
+                  <div
+                    ref={memberRef}
+                    onMouseDown={(e) => {
+                      e.stopPropagation(); // Prevent propagation
+                      setSelectedMemberId(member.id);
+                    }}
+                    className={`absolute cursor-move transition-all duration-200 flex flex-col items-center z-20 ${selectedMemberId === member.id ? 'ring-2 ring-blue-500 z-30' : 'hover:ring-2 hover:ring-green-400'
+                      }`}
+                    style={{
+                      width: `${40 * (scale / 100)}mm`,
+                    }}
+                  >
+                    <div className="w-full relative aspect-square overflow-hidden group">
+                      <img
+                        src={member.processedImage || member.originalImage || ''}
+                        className="w-full h-full object-cover pointer-events-none"
+                      />
+
+                      {/* Profile Text Overlay */}
+                      <div
+                        className="profile-text-overlay absolute bottom-0 inset-x-0 bg-white/80 backdrop-blur-[2px] py-1 text-center pointer-events-none z-50 print:bg-white print:backdrop-blur-none print:bottom-0 print:absolute"
+                      >
+                        <p className="text-[10px] font-bold text-gray-800 leading-tight whitespace-pre-wrap font-sans print:text-black">
+                          {member.profile || `メンバー${i + 1}`}
+                        </p>
+                      </div>
+
+                      {/* Explicit Print Styles Injection */}
+                      <style>{`
+                        @media print {
+                          .profile-text-overlay {
+                            background-color: white !important;
+                            opacity: 1 !important;
+                            visibility: visible !important;
+                            display: block !important;
+                            -webkit-print-color-adjust: exact !important;
+                            print-color-adjust: exact !important;
+                          }
+                          /* Ensure text is black */
+                          .profile-text-overlay p {
+                            color: black !important;
+                            text-shadow: none !important;
+                          }
+                        }
+                      `}</style>
+
+                      {/* Resize Handle (Only visible when selected) */}
+                      {selectedMemberId === member.id && (
+                        <div
+                          className="absolute bottom-0 right-0 w-6 h-6 bg-blue-500/50 cursor-se-resize flex items-center justify-center hover:bg-blue-600/70 pointer-events-auto print:hidden"
+                          style={{ borderTopLeftRadius: '4px' }}
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            const startY = e.clientY;
+                            const startScale = scale;
+
+                            const handleMouseMove = (moveEvent: MouseEvent) => {
+                              const deltaY = moveEvent.clientY - startY;
+                              const newScale = Math.max(20, Math.min(300, startScale + deltaY));
+
+                              // Create simplified listener for direct update
+                              // Since we can't easily access 'updateData' or 'data' reliably from here due to closure,
+                              // and we want this to be responsive.
+                              // The best way in this context without rewriting the whole component logic 
+                              // is to rely on the fact that we can call the helper if it's stable.
+                              // Or just trigger a state update.
+
+                              // Workaround for closure issue:
+                              // We will just invoke the parent's updateData.
+                              // We know 'data' is the closure variable. 
+                              // NOTE: This relies on 'data' being fresh enough or the component re-rendering fast enough.
+
+                              const updatedMembers = data.familyMembers.map(m =>
+                                m.id === member.id
+                                  ? { ...m, layout: { ...m.layout, x: member.layout?.x ?? defaultX, y: member.layout?.y ?? defaultY, scale: newScale } }
+                                  : m
+                              );
+                              updateData({ familyMembers: updatedMembers });
+                            };
+
+                            const handleMouseUp = () => {
+                              window.removeEventListener('mousemove', handleMouseMove);
+                              window.removeEventListener('mouseup', handleMouseUp);
+                            };
+
+                            window.addEventListener('mousemove', handleMouseMove);
+                            window.addEventListener('mouseup', handleMouseUp);
+                          }}
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M18 20L22 16" />
+                            <path d="M14 20L22 12" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </Draggable>
+              );
+            })
+          ) : (
+            // Group Mode: Single Draggable Image
+            <Draggable
+              nodeRef={imageRef}
+              position={{ x: layout.imageX * PX_PER_MM, y: layout.imageY * PX_PER_MM }}
+              onStop={(e, d) => handleDrag('image', e, d)}
+              bounds="parent"
+            >
+              <div
+                ref={imageRef}
+                className="relative cursor-move hover:ring-2 hover:ring-green-400 transition-shadow duration-200 z-10"
+                style={{
+                  height: '40%', // Initial height base
+                  marginBottom: '4mm',
+                  transformOrigin: 'center center',
+                }}
+              >
+                {(data.processedImage || data.originalImage) && (
+                  <img
+                    src={data.processedImage || data.originalImage || ''}
+                    className="w-full h-full pointer-events-none"
+                    style={{
+                      objectFit: layout.imageObjectFit,
+                      transform: `scale(${(layout.imageScale || 100) / 100})`
+                    }}
+                  />
+                )}
+              </div>
+            </Draggable>
+          )}
 
           {/* Draggable Text Container */}
           <Draggable
@@ -229,7 +408,7 @@ const StepPrint: React.FC<StepPrintProps> = ({ data, updateData, onBack }) => {
           >
             <div
               ref={textRef}
-              className="flex-1 flex flex-col cursor-move hover:ring-2 hover:ring-blue-400 transition-shadow duration-200"
+              className="flex-1 flex flex-col w-full px-8 cursor-move hover:ring-2 hover:ring-blue-400 transition-shadow duration-200 relative z-50 pointer-events-auto"
             >
               {/* Message */}
               <div style={{
