@@ -22,7 +22,7 @@ app.use((req, res, next) => {
     next();
 });
 
-const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_API_KEY || process.env.API_KEY;
 
 if (!apiKey) {
     console.error("❌ API Key is missing in .env.local");

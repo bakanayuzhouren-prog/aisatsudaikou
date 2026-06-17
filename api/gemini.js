@@ -22,7 +22,7 @@ export default async function handler(req, res) {
         return;
     }
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_API_KEY || process.env.API_KEY;
 
     if (!apiKey) {
         console.error("❌ API Key is missing");

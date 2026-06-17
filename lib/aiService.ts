@@ -32,7 +32,7 @@ export const generateGreetingMessage = generateGreetingMessageV2;
 
 export const transformImageToIllustration = async (base64Image: string, style: IllustrationStyle = 'standard'): Promise<string> => {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+  const timeoutId = setTimeout(() => controller.abort(), 90000); // 90s timeout (mobile networks)
 
   try {
     const response = await fetch('/api/gemini', {

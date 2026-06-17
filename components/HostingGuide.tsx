@@ -71,8 +71,8 @@ const HostingGuide: React.FC<HostingGuideProps> = ({ onClose }) => {
             <h4 className="font-bold text-gray-800 mb-2">APIキーをVercelに登録</h4>
             <p className="text-sm text-gray-600 mb-4">
               Vercelの設定画面 <strong>"Environment Variables"</strong> で、
-              Nameに <code>VITE_API_KEY</code>、Valueに <strong>手順0のAPIキー</strong> を貼り付けて [Add] を押します。<br/>
-              <span className="text-red-600 font-bold text-xs">※必ず「VITE_」を先頭に付けてください。</span>
+              Nameに <code>GEMINI_API_KEY</code>、Valueに <strong>手順0のAPIキー</strong> を貼り付けて [Add] を押します。<br/>
+              <span className="text-red-600 font-bold text-xs">※AI Studioで作成した新しいキーを貼り付けてください。</span>
             </p>
           </section>
 
