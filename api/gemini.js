@@ -41,7 +41,7 @@ export default async function handler(req, res) {
 
         // --- 1. 挨拶状生成 ---
         if (action === 'generate-greeting') {
-            const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
             const { name, newAddress, hobbies } = data;
             const prompt = `
                 世帯主名: ${name}

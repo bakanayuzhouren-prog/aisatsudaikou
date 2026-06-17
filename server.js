@@ -59,7 +59,7 @@ app.post('/api/gemini', async (req, res) => {
 
         // --- 1. 挨拶状生成 ---
         if (action === 'generate-greeting') {
-            const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
             console.log("📝 Generating greeting with data:", JSON.stringify(data, null, 2)); // Debug log
             const { name, newAddress, hobbies } = data;
             const prompt = `
@@ -86,7 +86,7 @@ app.post('/api/gemini', async (req, res) => {
 
             // --- 2. 画像変換 ---
         } else if (action === 'transform-image' || action === 'edit-image') {
-            const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-image" });
             const { image, style, prompt: userPrompt } = data;
 
             // Base64処理
