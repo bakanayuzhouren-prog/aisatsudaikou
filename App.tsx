@@ -87,7 +87,16 @@ function App() {
   return (
     <div className="min-h-screen bg-white">
       {isLocked && (
-        <PinLock mode="locked" onUnlock={(p) => { if (p === pin) { setIsLocked(false); return true; } return false; }} onSetPin={() => { }} />
+        <PinLock
+          mode="locked"
+          onUnlock={(p) => { if (p === pin) { setIsLocked(false); return true; } return false; }}
+          onSetPin={() => { }}
+          onResetAll={() => {
+            localStorage.removeItem(PIN_KEY);
+            setPin(null);
+            setIsLocked(false);
+          }}
+        />
       )}
       {showPinSetup && (
         <PinLock mode="setup" onUnlock={() => true} onSetPin={(p) => { localStorage.setItem(PIN_KEY, p); setPin(p); setShowPinSetup(false); }} onCancelSetup={() => setShowPinSetup(false)} />
