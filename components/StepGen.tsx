@@ -78,20 +78,40 @@ const StepGen: React.FC<StepGenProps> = ({ data, updateData, onNext, onBack }) =
       cameraStream.getTracks().forEach(track => track.stop());
     }
 
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      alert("お使いのブラウザはカメラ機能をサポートしていません。");
+    if (!navigator.mediaDevices?.getUserMedia) {
+      alert("お使いのブラウザはカメラ機能をサポートしていません。\nSafari または Chrome で開いてください。");
       return false;
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: mode }
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: mode },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        });
+      } catch {
+        // Some phones reject facingMode — fall back to any camera
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+      }
       setCameraStream(stream);
       return true;
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Camera Error:", err);
-      alert("カメラの起動に失敗しました。\n・カメラへのアクセスを許可してください\n・HTTPSまたはlocalhost環境でのみ動作します\n・他のアプリでカメラを使用中の場合は閉じてください");
+      const name = err instanceof DOMException ? err.name : '';
+      const hint =
+        name === 'NotAllowedError' ? 'ブラウザの設定でカメラを「許可」にしてください。' :
+        name === 'NotFoundError' ? 'カメラが見つかりません。' :
+        name === 'NotReadableError' ? '他のアプリがカメラを使用中かもしれません。' :
+        'Safari/Chrome で https:// から開いているか確認してください。';
+      alert(`カメラの起動に失敗しました。\n${hint}`);
       return false;
     }
   };
@@ -128,6 +148,10 @@ const StepGen: React.FC<StepGenProps> = ({ data, updateData, onNext, onBack }) =
       const canvas = canvasRef.current;
       const context = canvas.getContext('2d');
       if (context) {
+        if (!video.videoWidth || !video.videoHeight) {
+          alert("カメラの準備中です。プレビューが映ってから撮影してください。");
+          return;
+        }
         // Match canvas size to video resolution
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
@@ -328,9 +352,16 @@ const StepGen: React.FC<StepGenProps> = ({ data, updateData, onNext, onBack }) =
   }, []);
 
   useEffect(() => {
-    if (isCameraOpen && videoRef.current && cameraStream) {
-      videoRef.current.srcObject = cameraStream;
-    }
+    const video = videoRef.current;
+    if (!isCameraOpen || !video || !cameraStream) return;
+
+    video.srcObject = cameraStream;
+    video.muted = true;
+    video.play().catch((e) => console.error("Video play failed:", e));
+
+    return () => {
+      video.srcObject = null;
+    };
   }, [isCameraOpen, cameraStream]);
 
   const aspectRatioStyle = data.paperSize === 'a4' ? { aspectRatio: '1 / 1.414' } : { aspectRatio: '1 / 1.48' };
@@ -663,6 +694,7 @@ const StepGen: React.FC<StepGenProps> = ({ data, updateData, onNext, onBack }) =
                   ref={videoRef}
                   autoPlay
                   playsInline
+                  muted
                   className={`w-full h-full object-cover transition-transform duration-300 ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
                 />
                 <canvas ref={canvasRef} className="hidden" />
